@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head><title>Revisions</title></head>
+<body>
+  <h1>Revisions</h1>
+  <p>User: <%= user.role %> - <a href="/">Home</a></p>
+  <table border="1">
+    <tr><th>Version</th><th>Update Time</th><th>Action</th></tr>
+    <% revisions.forEach(v => { %>
+      <tr>
+        <td><%= v.versionNumber %></td>
+        <td><%= v.updateTime %></td>
+        <td>
+          <% if (user.role === 'admin') { %>
+          <form method="post" action="/rollback" style="display:inline">
+            <input type="hidden" name="versionNumber" value="<%= v.versionNumber %>"/>
+            <button type="submit">Rollback</button>
+          </form>
+          <% } %>
+        </td>
+      </tr>
+    <% }) %>
+  </table>
+</body>
+</html>

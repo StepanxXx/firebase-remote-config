@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head><title>Remote Config Admin</title></head>
+<body>
+  <h1>Remote Config Admin</h1>
+  <p>User: <%= user.role %> - <a href="/logout">Logout</a></p>
+  <h2>Parameters</h2>
+  <form method="post" action="/update">
+    <textarea name="parameters" rows="10" cols="80"><%= JSON.stringify(template.parameters, null, 2) %></textarea>
+    <h2>Parameter Groups</h2>
+    <textarea name="parameterGroups" rows="10" cols="80"><%= JSON.stringify(template.parameterGroups, null, 2) %></textarea>
+    <h2>Conditions</h2>
+    <textarea name="conditions" rows="10" cols="80"><%= JSON.stringify(template.conditions, null, 2) %></textarea>
+    <% if (user.role === 'admin') { %>
+    <button type="submit">Publish</button>
+    <% } %>
+  </form>
+  <a href="/revisions">View Revisions</a>
+</body>
+</html>
