@@ -9,7 +9,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // load firebase credentials from serviceAccount.json if exists
-const credPath = path.join(__dirname, 'serviceAccount.json');
+const parentDir = path.join(__dirname, '..');
+const credPath = path.join(parentDir, 'serviceAccount.json');
 if (fs.existsSync(credPath)) {
   admin.initializeApp({
     credential: admin.credential.cert(require(credPath))
@@ -20,10 +21,10 @@ if (fs.existsSync(credPath)) {
 
 const remoteConfig = admin.remoteConfig ? admin.remoteConfig() : null;
 
-app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(session({ secret: 'secret', resave: false, saveUninitialized: true }));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // simplistic user roles
 const users = {
@@ -42,7 +43,7 @@ function ensureAdmin(req, res, next) {
 }
 
 app.get('/login', (req, res) => {
-  res.render('login');
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
 app.post('/login', (req, res) => {
@@ -52,7 +53,7 @@ app.post('/login', (req, res) => {
     req.session.user = user;
     res.redirect('/');
   } else {
-    res.render('login', { error: 'Invalid credentials' });
+    res.redirect('/login?error=Invalid credentials');
   }
 });
 
@@ -62,8 +63,7 @@ app.get('/logout', (req, res) => {
 
 app.get('/', ensureAuth, async (req, res) => {
   if (!remoteConfig) return res.send('Remote Config not initialized');
-  const template = await remoteConfig.getTemplate();
-  res.render('index', { template, user: req.session.user });
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.post('/update', ensureAuth, ensureAdmin, async (req, res) => {
@@ -82,11 +82,18 @@ app.post('/update', ensureAuth, ensureAdmin, async (req, res) => {
   }
 });
 
+
 app.get('/revisions', ensureAuth, async (req, res) => {
+  if (!remoteConfig) return res.send('Remote Config not initialized');
+  res.sendFile(path.join(__dirname, 'public', 'revisions.html'));
+});
+
+
+app.get('/versions', ensureAuth, async (req, res) => {
   if (!remoteConfig) return res.sendStatus(500);
   try {
-    const revisions = await remoteConfig.listVersions({ pageSize: 10 });
-    res.render('revisions', { revisions: revisions.versions, user: req.session.user });
+    const revisions = await remoteConfig.listVersions({ pageSize: 30 });
+    res.json(revisions.versions);
   } catch (e) {
     res.status(500).send(e.message);
   }
@@ -98,6 +105,16 @@ app.post('/rollback', ensureAuth, ensureAdmin, async (req, res) => {
   try {
     await remoteConfig.rollback(versionNumber);
     res.redirect('/');
+  } catch (e) {
+    res.status(500).send(e.message);
+  }
+});
+
+app.get('/template', ensureAuth, async (req, res) => {
+  if (!remoteConfig) return res.sendStatus(500);
+  try {
+    const template = await remoteConfig.getTemplate();
+    res.json(template);
   } catch (e) {
     res.status(500).send(e.message);
   }
