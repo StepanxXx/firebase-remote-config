@@ -1,0 +1,119 @@
+<div class="versions-container">
+  <mat-toolbar color="primary">
+    <mat-icon>history</mat-icon>
+    <span class="toolbar-title">Version History</span>
+    <span class="spacer"></span>
+    <button mat-raised-button color="accent" (click)="loadVersions()">
+      <mat-icon>refresh</mat-icon>
+      Refresh
+    </button>
+    <button mat-button [matMenuTriggerFor]="downloadMenu">
+      <mat-icon>download</mat-icon>
+      Download Defaults
+    </button>
+    <mat-menu #downloadMenu="matMenu">
+      <button mat-menu-item (click)="downloadDefaults('JSON')">
+        <mat-icon>code</mat-icon>
+        JSON
+      </button>
+      <button mat-menu-item (click)="downloadDefaults('XML')">
+        <mat-icon>description</mat-icon>
+        XML
+      </button>
+      <button mat-menu-item (click)="downloadDefaults('PLIST')">
+        <mat-icon>list</mat-icon>
+        PLIST
+      </button>
+    </mat-menu>
+  </mat-toolbar>
+
+  <div class="content" *ngIf="!isLoading; else loadingSpinner">
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>Remote Config Versions</mat-card-title>
+        <mat-card-subtitle>History of all published versions</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        <table mat-table [dataSource]="dataSource" class="versions-table">
+          <!-- Version Number Column -->
+          <ng-container matColumnDef="versionNumber">
+            <th mat-header-cell *matHeaderCellDef>Version</th>
+            <td mat-cell *matCellDef="let version">
+              <span class="version-number">{{ version.versionNumber }}</span>
+              <mat-icon *ngIf="version.isLegacy" class="legacy-icon" title="Legacy version">history</mat-icon>
+            </td>
+          </ng-container>
+
+          <!-- Update Time Column -->
+          <ng-container matColumnDef="updateTime">
+            <th mat-header-cell *matHeaderCellDef>Updated</th>
+            <td mat-cell *matCellDef="let version">{{ version.updateTime | date:'medium' }}</td>
+          </ng-container>
+
+          <!-- Update User Column -->
+          <ng-container matColumnDef="updateUser">
+            <th mat-header-cell *matHeaderCellDef>Updated By</th>
+            <td mat-cell *matCellDef="let version">
+              <div class="user-info">
+                <span>{{ version.updateUser?.email || 'Unknown' }}</span>
+                <small *ngIf="version.updateUser?.name">{{ version.updateUser.name }}</small>
+              </div>
+            </td>
+          </ng-container>
+
+          <!-- Update Type Column -->
+          <ng-container matColumnDef="updateType">
+            <th mat-header-cell *matHeaderCellDef>Type</th>
+            <td mat-cell *matCellDef="let version">
+              <span class="update-type" [ngClass]="version.updateType?.toLowerCase()">
+                {{ version.updateType?.replace('_', ' ') || 'UNKNOWN' }}
+              </span>
+              <span *ngIf="version.rollbackSource" class="rollback-source">
+                (from v{{ version.rollbackSource }})
+              </span>
+            </td>
+          </ng-container>
+
+          <!-- Description Column -->
+          <ng-container matColumnDef="description">
+            <th mat-header-cell *matHeaderCellDef>Description</th>
+            <td mat-cell *matCellDef="let version">
+              {{ version.description || 'No description' }}
+            </td>
+          </ng-container>
+
+          <!-- Actions Column -->
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>Actions</th>
+            <td mat-cell *matCellDef="let version">
+              <button mat-icon-button 
+                      color="primary"
+                      (click)="rollbackToVersion(version)"
+                      [disabled]="!version.versionNumber"
+                      title="Rollback to this version">
+                <mat-icon>restore</mat-icon>
+              </button>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+        </table>
+
+        <div class="load-more" *ngIf="nextPageToken">
+          <button mat-raised-button color="primary" (click)="loadMoreVersions()">
+            <mat-icon>expand_more</mat-icon>
+            Load More Versions
+          </button>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <ng-template #loadingSpinner>
+    <div class="loading-container">
+      <mat-spinner></mat-spinner>
+      <p>Loading versions...</p>
+    </div>
+  </ng-template>
+</div>

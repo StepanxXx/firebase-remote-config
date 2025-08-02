@@ -1,0 +1,729 @@
+<html lang="en"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Remote Config - Build Management</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1976d2;
+            border-bottom: 2px solid #1976d2;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            background-color: #fafafa;
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        .logs-section {
+            background-color: #f0f8ff;
+            border-color: #4a90e2;
+        }
+        .logs-section h2 {
+            color: #4a90e2;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status.built {
+            background-color: #4caf50;
+            color: white;
+        }
+        .status.not-built {
+            background-color: #f44336;
+            color: white;
+        }
+        .status.running {
+            background-color: #2196f3;
+            color: white;
+        }
+        .status.stopped {
+            background-color: #ff9800;
+            color: white;
+        }
+        button {
+            background-color: #1976d2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #1565c0;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .danger {
+            background-color: #f44336;
+        }
+        .danger:hover {
+            background-color: #d32f2f;
+        }
+        .output {
+            background-color: #263238;
+            color: #fff;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 1000px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            margin-top: 10px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 15px 0;
+        }
+        .info-item {
+            background: white;
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 4px solid #1976d2;
+        }
+        .log-file {
+            background: white;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .log-file-info {
+            flex: 1;
+        }
+        .log-file-actions {
+            display: flex;
+            gap: 5px;
+        }
+        .btn-small {
+            padding: 4px 8px;
+            font-size: 12px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-download {
+            background-color: #4caf50;
+            color: white;
+        }
+        .btn-delete {
+            background-color: #f44336;
+            color: white;
+        }
+        .btn-small:hover {
+            opacity: 0.8;
+        }
+        .links {
+            margin: 20px 0;
+        }
+        .links a {
+            display: inline-block;
+            background-color: #4caf50;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            margin: 5px;
+        }
+        .links a:hover {
+            background-color: #45a049;
+        }
+        .loading {
+            display: none;
+            color: #1976d2;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Firebase Remote Config - Build Management</h1>
+        
+        <div class="links">
+            <a href="/" target="_blank">🚀 Open Angular App</a>
+            <a href="/public/index.html" target="_blank">📄 Legacy Interface</a>
+            <a href="http://localhost:4200" target="_blank" id="devLink">🔧 Development Server</a>
+        </div>
+
+        <div class="section">
+            <h2>📊 Project Status</h2>
+            <div id="projectStatus">
+                </div>
+        </div>
+
+        <div class="section">
+            <h2>🔨 Build Management</h2>
+            <div id="buildStatus">                   
+                </div>
+            <div style="margin-top: 15px;">
+                <button onclick="checkBuildStatus()">🔄 Refresh Status</button>
+                <button onclick="runBuild()">🔨 Build Project</button>
+                <button onclick="cleanBuild()" class="danger">🗑️ Clean Build</button>
+                <button onclick="installDeps()">📦 Install Dependencies</button>
+            </div>
+            <div id="buildOutput"></div>
+        </div>
+
+        <div class="section">
+            <h2>🛠️ Development Server</h2>
+            <div id="devStatus">
+                </div>
+            <div style="margin-top: 15px;">
+                <button onclick="checkDevStatus()">🔄 Check Dev Server</button>
+                <a href="http://localhost:4200" target="_blank">
+                    <button>🔗 Open Dev Server</button>
+                </a>
+            </div>
+            <p><strong>Note:</strong> To start the development server, run: <code>cd firebase-remote-config-ui &amp;&amp; npm start</code></p>
+        </div>
+
+        <div class="section logs-section">
+            <h2>📋 Request Logs</h2>
+            <div id="logsStatus">
+                <div class="info-grid">
+                    <div class="info-item">
+                        <strong>📊 Statistics</strong>
+                        <div id="logsStats">Loading...</div>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top: 15px;">
+                <button onclick="loadLogsStats()">🔄 Refresh Logs</button>
+                <button onclick="downloadAllLogs()">💾 Download All</button>
+                <button onclick="clearAllLogs()" class="danger">🗑️ Clear All Logs</button>
+                <button onclick="viewLatestLogs()">👁️ View Latest Logs</button>
+            </div>
+            <div id="logFilesList"></div>
+            <div id="logViewer" style="display:none; margin-top: 20px;">
+                <h3>📄 Log Viewer</h3>
+                <div style="margin: 10px 0;">
+                    <label>Filter by type:</label>
+                    <select id="logTypeFilter" onchange="filterLogs()">
+                        <option value="">All</option>
+                        <option value="INCOMING">Incoming Requests</option>
+                        <option value="OUTGOING">Outgoing Requests</option>
+                        <option value="ERRORS">Errors</option>
+                    </select>
+                    <button onclick="closeLogs()" style="margin-left: 10px;">❌ Close</button>
+                </div>
+                <div id="logEntries" class="output" style="max-height: 400px; overflow-y: auto;"></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📋 Quick Commands</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <h4>Development</h4>
+                    <code>cd firebase-remote-config-ui<br>npm start</code>
+                </div>
+                <div class="info-item">
+                    <h4>Production Build</h4>
+                    <code>cd firebase-remote-config-ui<br>npm run build</code>
+                </div>
+                <div class="info-item">
+                    <h4>Install Dependencies</h4>
+                    <code>cd firebase-remote-config-ui<br>npm install</code>
+                </div>
+                <div class="info-item">
+                    <h4>Start Backend</h4>
+                    <code>cd firebase-remote-config<br>node index.js</code>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Check all statuses on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            checkProjectStatus();
+            checkBuildStatus();
+            checkDevStatus();
+        });
+
+        async function checkProjectStatus() {
+            try {
+                const response = await fetch('/api/build/info');
+                const data = await response.json();
+                
+                document.getElementById('projectStatus').innerHTML = `
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <h4>Project: ${data.project.name || 'Unknown'}</h4>
+                            <p>Version: ${data.project.version || 'Unknown'}</p>
+                            <p>Dependencies: ${data.project.dependencies ? data.project.dependencies.length : 0}</p>
+                        </div>
+                        <div class="info-item">
+                            <h4>Build Status</h4>
+                            <p>Built: <span class="status ${data.build.built ? 'built' : 'not-built'}">${data.build.built ? 'YES' : 'NO'}</span></p>
+                            ${data.build.buildTime ? `<p>Build Time: ${new Date(data.build.buildTime).toLocaleString()}</p>` : ''}
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                document.getElementById('projectStatus').innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+
+        async function checkBuildStatus() {
+            try {
+                const response = await fetch('/api/build/status');
+                const data = await response.json();
+                
+                document.getElementById('buildStatus').innerHTML = `
+                    <p>Build Status: <span class="status ${data.built ? 'built' : 'not-built'}">${data.built ? 'BUILT' : 'NOT BUILT'}</span></p>
+                    ${data.buildTime ? `<p>Last Build: ${new Date(data.buildTime).toLocaleString()}</p>` : ''}
+                    ${data.message ? `<p>${data.message}</p>` : ''}
+                `;
+            } catch (error) {
+                document.getElementById('buildStatus').innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+
+        async function checkDevStatus() {
+            try {
+                const response = await fetch('/api/dev/status');
+                const data = await response.json();
+                
+                document.getElementById('devStatus').innerHTML = `
+                    <p>Development Server: <span class="status ${data.running ? 'running' : 'stopped'}">${data.running ? 'RUNNING' : 'STOPPED'}</span></p>
+                    <p>Port: ${data.port}</p>
+                    ${data.url ? `<p>URL: <a href="${data.url}" target="_blank">${data.url}</a></p>` : ''}
+                    ${data.message ? `<p>${data.message}</p>` : ''}
+                `;
+            } catch (error) {
+                document.getElementById('devStatus').innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+
+        async function runBuild() {
+            const button = event.target;
+            button.disabled = true;
+            button.textContent = '🔨 Building...';
+            
+            document.getElementById('buildOutput').innerHTML = '<div class="output">Starting build process...</div>';
+            
+            try {
+                const response = await fetch('/api/build', { method: 'POST' });
+                const data = await response.json();
+                
+                document.getElementById('buildOutput').innerHTML = `
+                    <div class="output">${data.success ? '✅ ' : '❌ '}${data.message}
+${data.output || data.error || ''}</div>
+                `;
+                
+                if (data.success) {
+                    setTimeout(checkBuildStatus, 1000);
+                }
+            } catch (error) {
+                document.getElementById('buildOutput').innerHTML = `<div class="output" style="color: #f44336;">❌ Error: ${error.message}</div>`;
+            } finally {
+                button.disabled = false;
+                button.textContent = '🔨 Build Project';
+            }
+        }
+
+        async function cleanBuild() {
+            if (!confirm('Are you sure you want to delete all build artifacts?')) return;
+            
+            const button = event.target;
+            button.disabled = true;
+            button.textContent = '🗑️ Cleaning...';
+            
+            try {
+                const response = await fetch('/api/build', { method: 'DELETE' });
+                const data = await response.json();
+                
+                document.getElementById('buildOutput').innerHTML = `
+                    <div class="output">${data.success ? '✅ ' : '❌ '}${data.message}</div>
+                `;
+                
+                setTimeout(checkBuildStatus, 500);
+            } catch (error) {
+                document.getElementById('buildOutput').innerHTML = `<div class="output" style="color: #f44336;">❌ Error: ${error.message}</div>`;
+            } finally {
+                button.disabled = false;
+                button.textContent = '🗑️ Clean Build';
+            }
+        }
+
+        async function installDeps() {
+            const button = event.target;
+            button.disabled = true;
+            button.textContent = '📦 Installing...';
+            
+            document.getElementById('buildOutput').innerHTML = '<div class="output">Installing dependencies...</div>';
+            
+            try {
+                const response = await fetch('/api/install', { method: 'POST' });
+                const data = await response.json();
+                
+                document.getElementById('buildOutput').innerHTML = `
+                    <div class="output">${data.success ? '✅ ' : '❌ '}${data.message}
+${data.output || data.error || ''}</div>
+                `;
+            } catch (error) {
+                document.getElementById('buildOutput').innerHTML = `<div class="output" style="color: #f44336;">❌ Error: ${error.message}</div>`;
+            } finally {
+                button.disabled = false;
+                button.textContent = '📦 Install Dependencies';
+            }
+        }
+
+        // Logs Management Functions
+        async function loadLogsStats() {
+            try {
+                const response = await fetch('/api/logs/stats');
+                const data = await response.json();
+                
+                if (data.error) {
+                    document.getElementById('logsStats').innerHTML = `❌ Error: ${data.error}`;
+                    return;
+                }
+                
+                const totalSizeMB = (data.totalSize / 1024 / 1024).toFixed(2);
+                
+                document.getElementById('logsStats').innerHTML = `
+                    📁 Directory: ${data.logDir}<br>
+                    📄 Files: ${data.totalFiles}<br>
+                    💾 Total Size: ${totalSizeMB} MB<br>
+                    📋 Latest: ${data.latestFile || 'None'}<br>
+                    🔄 Outgoing Requests: ${data.outgoingRequestsEnabled ? 'Enabled' : 'Disabled'}<br>
+                    <br>
+                    <strong>Latest File Stats:</strong><br>
+                    📥 Incoming: ${data.stats?.incomingRequests || 0}<br>
+                    📤 Outgoing: ${data.stats?.outgoingRequests || 0}<br>
+                    ❌ Errors: ${data.stats?.errors || 0}
+                `;
+                
+                await loadLogFilesList();
+            } catch (error) {
+                document.getElementById('logsStats').innerHTML = `❌ Error: ${error.message}`;
+            }
+        }
+
+        async function loadLogFilesList() {
+            try {
+                const response = await fetch('/api/logs/list');
+                const data = await response.json();
+                
+                const filesList = document.getElementById('logFilesList');
+                
+                if (!data.files || data.files.length === 0) {
+                    filesList.innerHTML = '<p><em>No log files available</em></p>';
+                    return;
+                }
+                
+                let html = '<h3>📄 Available Log Files:</h3>';
+                data.files.forEach(file => {
+                    const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+                    const modifiedDate = new Date(file.modified).toLocaleString();
+                    
+                    html += `
+                        <div class="log-file">
+                            <div class="log-file-info">
+                                <strong>${file.name}</strong><br>
+                                <small>Size: ${sizeMB} MB | Modified: ${modifiedDate}</small>
+                            </div>
+                            <div class="log-file-actions">
+                                <button class="btn-small" onclick="viewLogFile('${file.name}')" style="background-color: #2196f3; color: white;">👁️ View</button>
+                                <a href="${file.downloadUrl}" class="btn-small btn-download">💾 Download</a>
+                                <button class="btn-small btn-delete" onclick="deleteLogFile('${file.name}')">🗑️ Delete</button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                filesList.innerHTML = html;
+            } catch (error) {
+                document.getElementById('logFilesList').innerHTML = `❌ Error loading files: ${error.message}`;
+            }
+        }
+
+        async function deleteLogFile(filename) {
+            if (!confirm(`Are you sure you want to delete ${filename}?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/logs/${filename}`, { method: 'DELETE' });
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert(`Error: ${data.error}`);
+                } else {
+                    alert(data.message);
+                    await loadLogsStats();
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        async function clearAllLogs() {
+            if (!confirm('Are you sure you want to delete ALL log files? This action cannot be undone.')) {
+                return;
+            }
+            
+            const button = event.target;
+            button.disabled = true;
+            button.textContent = '🗑️ Clearing...';
+            
+            try {
+                const response = await fetch('/api/logs/all', { method: 'DELETE' });
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert(`Error: ${data.error}`);
+                } else {
+                    alert(data.message);
+                    await loadLogsStats();
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            } finally {
+                button.disabled = false;
+                button.textContent = '🗑️ Clear All Logs';
+            }
+        }
+
+        async function downloadAllLogs() {
+            try {
+                const response = await fetch('/api/logs/list');
+                const data = await response.json();
+                
+                if (!data.files || data.files.length === 0) {
+                    alert('No log files available to download');
+                    return;
+                }
+                
+                // Download each file
+                for (const file of data.files) {
+                    const link = document.createElement('a');
+                    link.href = file.downloadUrl;
+                    link.download = file.name;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    // Small delay between downloads
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+                
+                alert(`Started download of ${data.files.length} log files`);
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        // Initialize logs on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadLogsStats();
+        });
+
+        // Log viewer functions
+        let currentLogFile = null;
+        let currentLogEntries = [];
+
+        async function viewLatestLogs() {
+            try {
+                const response = await fetch('/api/logs/list');
+                const data = await response.json();
+                
+                if (!data.files || data.files.length === 0) {
+                    alert('No log files available');
+                    return;
+                }
+                
+                await viewLogFile(data.files[0].name);
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        async function viewLogFile(filename) {
+            try {
+                currentLogFile = filename;
+                const response = await fetch(`/api/logs/entries/${filename}?limit=100000`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert(`Error: ${data.error}`);
+                    return;
+                }
+                
+                currentLogEntries = data.entries;
+                document.getElementById('logViewer').style.display = 'block';
+                document.getElementById('logTypeFilter').value = '';
+                
+                displayLogEntries(currentLogEntries);
+                
+                // Scroll to log viewer
+                document.getElementById('logViewer').scrollIntoView({ behavior: 'smooth' });
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        async function filterLogs() {
+            const filterType = document.getElementById('logTypeFilter').value;
+            
+            if (!currentLogFile) return;
+            
+            try {
+                const url = filterType ? 
+                    `/api/logs/entries/${currentLogFile}?type=${filterType}&limit=100000` :
+                    `/api/logs/entries/${currentLogFile}?limit=100000`;
+                    
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert(`Error: ${data.error}`);
+                    return;
+                }
+                
+                displayLogEntries(data.entries);
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        function displayLogEntries(entries) {
+            const logEntries = document.getElementById('logEntries');
+            
+            if (!entries || entries.length === 0) {
+                logEntries.innerHTML = '<em>No log entries found</em>';
+                return;
+            }
+            
+            let html = '';
+            entries.forEach((entry, index) => {
+                const timestamp = new Date(entry.timestamp).toLocaleString();
+                let typeColor = '#666';
+                let typeIcon = '📝';
+                
+                switch (entry.type) {
+                    case 'REQUEST':
+                        typeColor = '#4caf50';
+                        typeIcon = '📥';
+                        break;
+                    case 'OUTGOING_REQUEST':
+                        typeColor = '#2196f3';
+                        typeIcon = '📤';
+                        break;
+                    case 'OUTGOING_REQUEST_ERROR':
+                        typeColor = '#ff9800';
+                        typeIcon = '📤❌';
+                        break;
+                    case 'ERROR':
+                        typeColor = '#f44336';
+                        typeIcon = '❌';
+                        break;
+                }
+
+                html += [
+                    `<div style="border-bottom: 1px solid #eee; padding: 10px 0; margin: 5px 0; cursor: pointer;" onclick="toggleLogDetails(${index})">`,
+                        `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">`,
+                            `<span style="color: ${typeColor}; font-weight: bold;">${typeIcon} ${entry.type}</span>`,
+                            `<small>${timestamp}</small>`,
+                        `</div>`,
+                        `<div id="log-summary-${index}">`,
+                            `${formatLogEntry(entry)}`,
+                        `</div>`,
+                        `<div id="log-details-${index}" style="display: none; margin-top: 10px; background: #f9f9f9; padding: 10px; border-radius: 4px;">`,
+                            `<strong>Full Details:</strong>`,
+                            `<pre style="color: black; white-space: pre-wrap; font-size: 12px; max-height: 300px; overflow-y: auto;">${JSON.stringify(entry, null, 2)}</pre>`,
+                        `</div>`,
+                    `</div>`
+                    ].join('');
+            });
+            
+            logEntries.innerHTML = html;
+        }
+
+        function formatLogEntry(entry) {
+            switch (entry.type) {
+                case 'REQUEST':
+                    const hasReqBody = entry.request.body && Object.keys(entry.request.body).length > 0;
+                    return [
+                        `<small>${entry.request.method} ${entry.request.url}</small><br>`,
+                        `<small>User: ${entry.request.user} | Status: ${entry.response.statusCode} | Time: ${entry.response.responseTime}</small>`,
+                        `${hasReqBody ? `<br><small>Request Body: ${JSON.stringify(entry.request.body).substring(0, 100)}...</small>` : ''}`,
+                    ].join('');
+                case 'OUTGOING_REQUEST':
+                    const hasOutReqBody = entry.request?.body && entry.request.body.length > 0;
+                    return [
+                        `<small>${entry.method} ${entry.url}</small><br>`,
+                        `<small>Status: ${entry.response.statusCode} | Time: ${entry.response.responseTime}</small>`,
+                        `${hasOutReqBody ? `<br><small>Request Body: ${entry.request.body.substring(0, 100)}...</small>` : ''}`,
+                        `${entry.response.body ? `<br><small>Response: ${entry.response.body.substring(0, 100)}...</small>` : ''}`,
+                    ].join('');
+                case 'OUTGOING_REQUEST_ERROR':
+                    const hasOutErrReqBody = entry.request?.body && entry.request.body.length > 0;
+                    return [
+                        `<small>${entry.method} ${entry.url}</small><br>`,
+                        `<small style="color: #f44336;">Error: ${entry.error.message} | Time: ${entry.responseTime}</small>`,
+                        `${hasOutErrReqBody ? `<br><small>Request Body: ${entry.request.body.substring(0, 100)}...</small>` : ''}`,
+                    ].join('');
+                case 'ERROR':
+                    return [
+                        `<small style="color: #f44336;">${entry.error.name}: ${entry.error.message}</small><br>`,
+                        `${entry.request ? `<small>Request: ${entry.request.method} ${entry.request.url}</small>` : ''}`,
+                    ].join('');
+                default:
+                    return `<pre>${JSON.stringify(entry, null, 2)}</pre>`;
+            }
+        }
+
+        function closeLogs() {
+            document.getElementById('logViewer').style.display = 'none';
+            currentLogFile = null;
+            currentLogEntries = [];
+        }
+
+        function toggleLogDetails(index) {
+            const detailsDiv = document.getElementById(`log-details-${index}`);
+            if (detailsDiv.style.display === 'none') {
+                detailsDiv.style.display = 'block';
+            } else {
+                detailsDiv.style.display = 'none';
+            }
+        }
+    </script>
+
+
+</body></html>
