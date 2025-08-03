@@ -1,5 +1,4 @@
 const express = require('express');
-const session = require('express-session');
 const bodyParser = require('body-parser');
 const admin = require('firebase-admin');
 const fs = require('fs');
@@ -33,7 +32,6 @@ const logger = new RequestLogger({
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
-app.use(session({ secret: 'secret', resave: false, saveUninitialized: true }));
 
 // Add request logging middleware
 app.use(logger.middleware());
@@ -45,47 +43,35 @@ app.use(express.static(path.join(__dirname, 'firebase-remote-config-ui/dist/fire
 // Legacy static files for backward compatibility
 app.use('/public', express.static(path.join(__dirname, 'public')));
 
-// simplistic user roles
-const users = {
-  admin: { password: 'admin', role: 'admin' },
-  viewer: { password: 'viewer', role: 'viewer' }
-};
-
-function ensureAuth(req, res, next) {
-  if (req.session.user) return next();
-  
-  // For API calls, return JSON error instead of redirect
-  if (req.path.startsWith('/api')) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  
-  res.redirect('/login');
-}
-
-function ensureAdmin(req, res, next) {
-  if (req.session.user && req.session.user.role === 'admin') return next();
-  
-  // For API calls, return JSON error instead of plain text
-  if (req.path.startsWith('/api')) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
-  
-  res.status(403).send('Forbidden');
-}
-
-app.post('/api/login', (req, res) => {
-  const { username, password } = req.body;
-  const user = users[username];
-  if (user && user.password === password) {
-    req.session.user = user;
-    res.status(200).json({ message: 'Login successful', role: user.role });
-  } else {
-    res.status(401).json({ error: 'Invalid credentials' });
-  }
+// API Status endpoint
+app.get('/api/status', (req, res) => {
+  res.status(200).json({
+    status: 'online',
+    timestamp: new Date().toISOString(),
+    version: '1.0.0',
+    authentication: 'disabled',
+    features: {
+      firebaseRemoteConfig: !!remoteConfig,
+      logging: true,
+      buildManagement: true
+    },
+    endpoints: [
+      'GET /api/template',
+      'PUT /api/template',
+      'GET /api/versions',
+      'POST /api/rollback',
+      'GET /api/downloadDefaults',
+      'POST /api/fetch',
+      'GET /api/history',
+      'GET /api/build/status',
+      'POST /api/build',
+      'GET /api/logs/stats'
+    ]
+  });
 });
 
 // Отримання конкретної версії конфігурації (повинно бути перед загальним /api/template)
-app.get('/api/template/version/:versionNumber', ensureAuth, async (req, res) => {
+app.get('/api/template/version/:versionNumber', async (req, res) => {
   if (!remoteConfig) {
     return res.status(500).json({ error: 'Remote Config not initialized' });
   }
@@ -105,7 +91,7 @@ app.get('/api/template/version/:versionNumber', ensureAuth, async (req, res) => 
   }
 });
 
-app.get('/api/template', ensureAuth, async (req, res) => {
+app.get('/api/template', async (req, res) => {
   if (!remoteConfig) {
     return res.status(500).json({ error: 'Remote Config not initialized' });
   }
@@ -128,42 +114,8 @@ app.get('/api/template', ensureAuth, async (req, res) => {
   }
 });
 
-app.post('/api/update', ensureAuth, ensureAdmin, async (req, res) => {
-  if (!remoteConfig) {
-    return res.status(500).json({ error: 'Remote Config not initialized' });
-  }
-  
-  try {
-    const { validateOnly } = req.query;
-    const templateData = req.body;
-    
-    // Отримуємо поточний шаблон
-    const currentTemplate = await remoteConfig.getTemplate();
-    
-    // Оновлюємо поля з запиту
-    if (templateData.parameters) currentTemplate.parameters = templateData.parameters;
-    if (templateData.parameterGroups) currentTemplate.parameterGroups = templateData.parameterGroups;
-    if (templateData.conditions) currentTemplate.conditions = templateData.conditions;
-    
-    // Валідуємо шаблон
-    await remoteConfig.validateTemplate(currentTemplate);
-    
-    if (validateOnly === 'true') {
-      // Тільки валідація, не публікуємо
-      res.status(200).json({ message: 'Template validation successful', template: currentTemplate });
-    } else {
-      // Публікуємо шаблон
-      const publishedTemplate = await remoteConfig.publishTemplate(currentTemplate);
-      res.status(200).json({ message: 'Template updated successfully', template: publishedTemplate });
-    }
-  } catch (error) {
-    console.error('Error updating template:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// PUT метод для сумісності з frontend
-app.put('/api/template', ensureAuth, ensureAdmin, async (req, res) => {
+// PUT метод для оновлення template
+app.put('/api/template', async (req, res) => {
   if (!remoteConfig) {
     return res.status(500).json({ error: 'Remote Config not initialized' });
   }
@@ -197,7 +149,7 @@ app.put('/api/template', ensureAuth, ensureAdmin, async (req, res) => {
   }
 });
 
-app.get('/api/versions', ensureAuth, async (req, res) => {
+app.get('/api/versions', async (req, res) => {
   if (!remoteConfig) {
     return res.status(500).json({ error: 'Remote Config not initialized' });
   }
@@ -228,7 +180,7 @@ app.get('/api/versions', ensureAuth, async (req, res) => {
   }
 });
 
-app.post('/api/rollback', ensureAuth, ensureAdmin, async (req, res) => {
+app.post('/api/rollback', async (req, res) => {
   if (!remoteConfig) {
     return res.status(500).json({ error: 'Remote Config not initialized' });
   }
@@ -254,7 +206,7 @@ app.post('/api/rollback', ensureAuth, ensureAdmin, async (req, res) => {
 // Додаткові API методи згідно з специфікацією
 
 // Завантаження дефолтних значень у різних форматах
-app.get('/api/downloadDefaults', ensureAuth, async (req, res) => {
+app.get('/api/downloadDefaults', async (req, res) => {
   if (!remoteConfig) {
     return res.status(500).json({ error: 'Remote Config not initialized' });
   }
@@ -343,7 +295,7 @@ app.post('/api/fetch', async (req, res) => {
 });
 
 // Історія змін конфігурації
-app.get('/api/history', ensureAuth, async (req, res) => {
+app.get('/api/history', async (req, res) => {
   if (!remoteConfig) {
     return res.status(500).json({ error: 'Remote Config not initialized' });
   }
@@ -685,7 +637,7 @@ app.get('/api/dev/status', (req, res) => {
 });
 
 // Logging API endpoints
-app.get('/api/logs/stats', ensureAuth, ensureAdmin, (req, res) => {
+app.get('/api/logs/stats', (req, res) => {
   try {
     const stats = logger.getStats();
     res.status(200).json(stats);
@@ -695,7 +647,7 @@ app.get('/api/logs/stats', ensureAuth, ensureAdmin, (req, res) => {
 });
 
 // List all log files
-app.get('/api/logs/list', ensureAuth, ensureAdmin, (req, res) => {
+app.get('/api/logs/list', (req, res) => {
   try {
     const logsDir = path.join(__dirname, 'logs');
     
@@ -725,7 +677,7 @@ app.get('/api/logs/list', ensureAuth, ensureAdmin, (req, res) => {
 });
 
 // Download specific log file
-app.get('/api/logs/download/:filename', ensureAuth, ensureAdmin, (req, res) => {
+app.get('/api/logs/download/:filename', (req, res) => {
   try {
     const logsDir = path.join(__dirname, 'logs');
     const filename = req.params.filename;
@@ -748,7 +700,7 @@ app.get('/api/logs/download/:filename', ensureAuth, ensureAdmin, (req, res) => {
 });
 
 // Delete all log files
-app.delete('/api/logs/all', ensureAuth, ensureAdmin, (req, res) => {
+app.delete('/api/logs/all', (req, res) => {
   try {
     const logsDir = path.join(__dirname, 'logs');
     
@@ -774,7 +726,7 @@ app.delete('/api/logs/all', ensureAuth, ensureAdmin, (req, res) => {
 });
 
 // Delete specific log file
-app.delete('/api/logs/:filename', ensureAuth, ensureAdmin, (req, res) => {
+app.delete('/api/logs/:filename', (req, res) => {
   try {
     const logsDir = path.join(__dirname, 'logs');
     const filename = req.params.filename;
@@ -798,7 +750,7 @@ app.delete('/api/logs/:filename', ensureAuth, ensureAdmin, (req, res) => {
 });
 
 // Get log entries with filtering
-app.get('/api/logs/entries/:filename', ensureAuth, ensureAdmin, (req, res) => {
+app.get('/api/logs/entries/:filename', (req, res) => {
   try {
     const logsDir = path.join(__dirname, 'logs');
     const filename = req.params.filename;

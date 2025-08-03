@@ -1,7 +1,7 @@
 <div class="versions-container">
   <mat-toolbar color="primary">
     <mat-icon>history</mat-icon>
-    <span class="toolbar-title">Version History</span>
+    <span class="toolbar-title">Configuration History</span>
     <span class="spacer"></span>
     <button mat-raised-button color="accent" (click)="loadVersions()">
       <mat-icon>refresh</mat-icon>
@@ -30,8 +30,8 @@
   <div class="content" *ngIf="!isLoading; else loadingSpinner">
     <mat-card>
       <mat-card-header>
-        <mat-card-title>Remote Config Versions</mat-card-title>
-        <mat-card-subtitle>History of all published versions</mat-card-subtitle>
+        <mat-card-title>Remote Config History</mat-card-title>
+        <mat-card-subtitle>Complete history of all versions, revisions, and configuration changes</mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
         <table mat-table [dataSource]="dataSource" class="versions-table">

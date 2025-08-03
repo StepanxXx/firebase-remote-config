@@ -1,43 +1,338 @@
 <div class="dashboard-container">
-  <mat-toolbar color="primary">
-    <span class="toolbar-title">{{ title }}</span>
-    <span class="spacer"></span>
-    
-    <!-- Action Buttons -->
-    <button mat-raised-button color="accent" 
-            *ngIf="templateData" 
-            (click)="saveTemplate()" 
-            matTooltip="Save changes to Firebase">
-      <mat-icon>save</mat-icon>
-      Save Template
-    </button>
-    
-    <button mat-icon-button [matMenuTriggerFor]="menu" matTooltip="More options">
-      <mat-icon>more_vert</mat-icon>
-    </button>
-    
-    <mat-menu #menu="matMenu">
-      <button mat-menu-item (click)="downloadDefaults('JSON')">
-        <mat-icon>download</mat-icon>
-        <span>Download as JSON</span>
-      </button>
-      <button mat-menu-item (click)="downloadDefaults('XML')">
-        <mat-icon>download</mat-icon>
-        <span>Download as XML</span>
-      </button>
-      <button mat-menu-item (click)="downloadDefaults('PLIST')">
-        <mat-icon>download</mat-icon>
-        <span>Download as PLIST</span>
-      </button>
-      <mat-divider></mat-divider>
-      <button mat-menu-item (click)="testFetchConfig()">
-        <mat-icon>cloud_download</mat-icon>
-        <span>Test Fetch Config</span>
-      </button>
-    </mat-menu>
-  </mat-toolbar>
 
-  <div class="content" *ngIf="!isLoading; else loadingSpinner">
+<div class="dashboard-container">
+  <!-- Main Content with Sidenav -->
+  <mat-sidenav-container class="sidenav-container">
+    
+    <!-- Edit Parameter Sidenav -->
+    <mat-sidenav #editSidenav 
+                 mode="over" 
+                 position="end" 
+                 class="edit-sidenav"
+                 [fixedInViewport]="true"
+                 (backdropClick)="cancelEdit()"
+                 disableClose="false">
+      
+      <div class="sidenav-header" *ngIf="editingParameter && editingParameterData">
+        <div class="header-content">
+          <div class="header-title">
+            <mat-icon>edit</mat-icon>
+            <div>
+              <h2>Edit Parameter</h2>
+              <p>{{ editingParameter }}</p>
+            </div>
+          </div>
+          <button mat-icon-button (click)="cancelEdit()" matTooltip="Close">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      </div>
+
+      <div class="sidenav-content" *ngIf="editingParameterData">
+        
+        <!-- Basic Parameter Info -->
+        <div class="edit-section">
+          <h4><mat-icon>info</mat-icon> Basic Information</h4>
+          
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Description</mat-label>
+            <textarea matInput 
+                      [(ngModel)]="editingParameterData.description" 
+                      rows="3"
+                      placeholder="Enter parameter description..."></textarea>
+          </mat-form-field>
+          
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Value Type</mat-label>
+            <mat-select [(ngModel)]="editingParameterData.valueType">
+              <mat-option value="STRING">STRING</mat-option>
+              <mat-option value="BOOLEAN">BOOLEAN</mat-option>
+              <mat-option value="NUMBER">NUMBER</mat-option>
+              <mat-option value="JSON">JSON</mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+
+        <!-- Default Value -->
+        <div class="edit-section">
+          <h4><mat-icon>settings</mat-icon> Default Value</h4>
+          
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Default Value</mat-label>
+            <textarea matInput 
+                      [(ngModel)]="editingParameterData.defaultValue.value" 
+                      rows="4"
+                      placeholder="Enter default value..."></textarea>
+          </mat-form-field>
+          
+          <mat-checkbox [(ngModel)]="editingParameterData.defaultValue.useInAppDefault">
+            Use In-App Default
+          </mat-checkbox>
+        </div>
+
+        <!-- Personalization -->
+        <div class="edit-section">
+          <h4><mat-icon>person</mat-icon> Personalization</h4>
+          
+          <mat-checkbox [checked]="!!editingParameterData.defaultValue?.personalizationValue"
+                        (change)="togglePersonalization($event)">
+            Enable Personalization
+          </mat-checkbox>
+          
+          <mat-form-field appearance="outline" class="full-width" 
+                          *ngIf="editingParameterData.defaultValue?.personalizationValue">
+            <mat-label>Personalization ID</mat-label>
+            <input matInput 
+                   [(ngModel)]="editingParameterData.defaultValue.personalizationValue.personalizationId"
+                   placeholder="Enter personalization ID...">
+          </mat-form-field>
+        </div>
+
+        <!-- Rollout Configuration -->
+        <div class="edit-section">
+          <h4><mat-icon>trending_up</mat-icon> Rollout Configuration</h4>
+          
+          <mat-checkbox [checked]="!!editingParameterData.defaultValue?.rolloutValue"
+                        (change)="toggleRollout($event)">
+            Enable Rollout
+          </mat-checkbox>
+          
+          <div *ngIf="editingParameterData.defaultValue?.rolloutValue" class="rollout-fields">
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Rollout ID</mat-label>
+              <input matInput 
+                     [(ngModel)]="editingParameterData.defaultValue.rolloutValue.rolloutId"
+                     placeholder="Enter rollout ID...">
+            </mat-form-field>
+            
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Percentage</mat-label>
+              <input matInput 
+                     type="number" 
+                     min="0" 
+                     max="100"
+                     [(ngModel)]="editingParameterData.defaultValue.rolloutValue.percent"
+                     placeholder="0-100">
+              <mat-hint>Percentage of users (0-100)</mat-hint>
+            </mat-form-field>
+            
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Rollout Value</mat-label>
+              <textarea matInput 
+                        [(ngModel)]="editingParameterData.defaultValue.rolloutValue.value" 
+                        rows="3"
+                        placeholder="Enter rollout value..."></textarea>
+            </mat-form-field>
+          </div>
+        </div>
+
+        <!-- Conditional Values -->
+        <div class="conditional-values-section">
+          <h4><mat-icon>rule</mat-icon> Conditional Values</h4>
+          
+          <div *ngIf="getConditionalValuesArray().length > 0">
+            <div *ngFor="let conditionalValue of getConditionalValuesArray(); let i = index; trackBy: trackByConditionalValue" 
+                 class="conditional-value-item">
+              
+              <div class="conditional-value-header">
+                <div class="conditional-value-index">Condition {{ i + 1 }}</div>
+                <button class="conditional-value-remove" 
+                        (click)="removeConditionalValue(conditionalValue.key)"
+                        matTooltip="Remove this conditional value">
+                  <mat-icon>close</mat-icon>
+                </button>
+              </div>
+              
+              <div class="conditional-value-fields">
+                <!-- Condition Name -->
+                <div class="condition-name-field">
+                  <mat-form-field appearance="outline" class="full-width">
+                    <mat-label>Condition Name</mat-label>
+                    <mat-select [value]="conditionalValue.key"
+                                (selectionChange)="updateConditionalValueCondition(conditionalValue.key, $event.value)"
+                                placeholder="Select a condition">
+                      <mat-option *ngFor="let condition of availableConditions" 
+                                  [value]="condition.name">
+                        {{ condition.name }}
+                      </mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                </div>
+                
+                <!-- Condition Expression Display -->
+                <div class="condition-expression" *ngIf="getConditionExpression(conditionalValue.key)">
+                  <h5><mat-icon>code</mat-icon> Expression</h5>
+                  <div class="condition-expression-text">
+                    {{ getConditionExpression(conditionalValue.key) }}
+                  </div>
+                </div>
+                
+                <!-- Conditional Value Type Selection -->
+                <div class="conditional-value-type">
+                  <h5><mat-icon>tune</mat-icon> Value Type</h5>
+                  <mat-radio-group [value]="getConditionalValueType(conditionalValue)" 
+                                   (change)="updateConditionalValueType(conditionalValue, $event.value)"
+                                   class="value-type-radio">
+                    <mat-radio-button value="value">Static Value</mat-radio-button>
+                    <mat-radio-button value="useInAppDefault">Use In-App Default</mat-radio-button>
+                    <mat-radio-button value="personalizationValue">Personalization</mat-radio-button>
+                    <mat-radio-button value="rolloutValue">Rollout</mat-radio-button>
+                  </mat-radio-group>
+                </div>
+                
+                <!-- Static Value -->
+                <mat-form-field appearance="outline" class="full-width" 
+                                *ngIf="getConditionalValueType(conditionalValue) === 'value'">
+                  <mat-label>Conditional Value</mat-label>
+                  <textarea matInput 
+                            [(ngModel)]="conditionalValue.value.value" 
+                            rows="3"
+                            placeholder="Enter value for this condition..."></textarea>
+                </mat-form-field>
+                
+                <!-- Use In-App Default Message -->
+                <div *ngIf="getConditionalValueType(conditionalValue) === 'useInAppDefault'" class="in-app-default-info">
+                  <mat-icon>info</mat-icon>
+                  <p>This condition will use the in-app default value instead of the Remote Config value.</p>
+                </div>
+                
+                <!-- Personalization (if selected) -->
+                <div *ngIf="getConditionalValueType(conditionalValue) === 'personalizationValue'" class="personalization-section">
+                  <h5><mat-icon>person</mat-icon> Personalization</h5>
+                  <mat-form-field appearance="outline" class="full-width">
+                    <mat-label>Personalization ID</mat-label>
+                    <input matInput 
+                           [(ngModel)]="conditionalValue.value.personalizationValue.personalizationId"
+                           placeholder="Enter personalization ID...">
+                  </mat-form-field>
+                </div>
+                
+                <!-- Rollout (if selected) -->
+                <div *ngIf="getConditionalValueType(conditionalValue) === 'rolloutValue'" class="rollout-section">
+                  <h5><mat-icon>trending_up</mat-icon> Rollout</h5>
+                  <mat-form-field appearance="outline" class="full-width">
+                    <mat-label>Rollout ID</mat-label>
+                    <input matInput 
+                           [(ngModel)]="conditionalValue.value.rolloutValue.rolloutId"
+                           placeholder="Enter rollout ID...">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="half-width">
+                    <mat-label>Percentage</mat-label>
+                    <input matInput 
+                           type="number" 
+                           min="0" 
+                           max="100"
+                           [(ngModel)]="conditionalValue.value.rolloutValue.percent"
+                           placeholder="0-100">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="full-width">
+                    <mat-label>Rollout Value</mat-label>
+                    <textarea matInput 
+                              [(ngModel)]="conditionalValue.value.rolloutValue.value" 
+                              rows="2"
+                              placeholder="Enter rollout value..."></textarea>
+                  </mat-form-field>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Add New Conditional Value Button -->
+          <button class="add-conditional-value" 
+                  (click)="addConditionalValue()">
+            <mat-icon>add</mat-icon>
+            Add Conditional Value
+          </button>
+          
+          <!-- Help Section -->
+          <div class="conditional-values-help">
+            <p>
+              <mat-icon>info</mat-icon>
+              Conditional values allow you to return different parameter values based on conditions. 
+              Create conditions first in the Conditions tab, then reference them here.
+              Each conditional value follows the RemoteConfigParameterValue schema.
+            </p>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Sidenav Actions -->
+      <div class="sidenav-actions">
+        <button mat-raised-button color="primary" 
+                (click)="saveEdit(editingParameter!)"
+                class="full-width-button">
+          <mat-icon>save</mat-icon>
+          Save Changes
+        </button>
+        
+        <button mat-stroked-button 
+                (click)="cancelEdit()"
+                class="full-width-button">
+          <mat-icon>cancel</mat-icon>
+          Cancel
+        </button>
+      </div>
+
+    </mat-sidenav>
+
+    <!-- Main Content -->
+    <mat-sidenav-content class="main-content">
+      <mat-toolbar color="primary">
+        <span class="toolbar-title">{{ title }}</span>
+        <span class="spacer"></span>
+        
+        <!-- Navigation Buttons -->
+        <button mat-raised-button color="default" 
+                routerLink="/versions"
+                matTooltip="View version history and manage rollbacks">
+          <mat-icon>history</mat-icon>
+          Configuration History
+        </button>
+        
+        <!-- Action Buttons -->
+        <button mat-raised-button color="accent" 
+                *ngIf="templateData" 
+                (click)="saveTemplate()" 
+                matTooltip="Save changes to Firebase">
+          <mat-icon>save</mat-icon>
+          Save Template
+        </button>
+        
+        <button mat-icon-button [matMenuTriggerFor]="menu" matTooltip="More options">
+          <mat-icon>more_vert</mat-icon>
+        </button>
+        
+        <mat-menu #menu="matMenu">
+          <!-- Navigation Options -->
+          <button mat-menu-item routerLink="/versions">
+            <mat-icon>history</mat-icon>
+            <span>Configuration History</span>
+          </button>
+          <mat-divider></mat-divider>
+          
+          <!-- Download Options -->
+          <button mat-menu-item (click)="downloadDefaults('JSON')">
+            <mat-icon>download</mat-icon>
+            <span>Download as JSON</span>
+          </button>
+          <button mat-menu-item (click)="downloadDefaults('XML')">
+            <mat-icon>download</mat-icon>
+            <span>Download as XML</span>
+          </button>
+          <button mat-menu-item (click)="downloadDefaults('PLIST')">
+            <mat-icon>download</mat-icon>
+            <span>Download as PLIST</span>
+          </button>
+          <mat-divider></mat-divider>
+          <button mat-menu-item (click)="testFetchConfig()">
+            <mat-icon>cloud_download</mat-icon>
+            <span>Test Fetch Config</span>
+          </button>
+        </mat-menu>
+      </mat-toolbar>
+      
+      <div class="content" *ngIf="!isLoading; else loadingSpinner">
     <mat-tab-group *ngIf="templateData">
       
       <!-- Parameters Tab -->
@@ -179,22 +474,9 @@
             </mat-card-content>
             <mat-card-actions>
               <button mat-button color="primary" 
-                      *ngIf="editingParameter !== param.key"
                       (click)="startEdit(param.key, param.value.defaultValue?.value || '')">
                 <mat-icon>edit</mat-icon>
-                Quick Edit
-              </button>
-              <button mat-button color="primary" 
-                      *ngIf="editingParameter === param.key"
-                      (click)="saveEdit(param.key)">
-                <mat-icon>save</mat-icon>
-                Save
-              </button>
-              <button mat-button 
-                      *ngIf="editingParameter === param.key"
-                      (click)="cancelEdit()">
-                <mat-icon>cancel</mat-icon>
-                Cancel
+                Edit
               </button>
             </mat-card-actions>
           </mat-card>
@@ -580,12 +862,15 @@
       </mat-tab>
 
     </mat-tab-group>
-  </div>
+      </div>
 
-  <ng-template #loadingSpinner>
-    <div class="loading-container">
-      <mat-spinner></mat-spinner>
-      <p>Loading template data...</p>
-    </div>
-  </ng-template>
+      <ng-template #loadingSpinner>
+        <div class="loading-container">
+          <mat-spinner></mat-spinner>
+          <p>Loading template data...</p>
+        </div>
+      </ng-template>
+    </mat-sidenav-content>
+
+  </mat-sidenav-container>
 </div>

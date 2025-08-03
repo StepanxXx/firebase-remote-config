@@ -1,7 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
+import { MatSidenav } from '@angular/material/sidenav';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -21,6 +22,9 @@ import { MatSortModule } from '@angular/material/sort';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatSidenavModule } from '@angular/material/sidenav';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatRadioModule } from '@angular/material/radio';
 import { RemoteConfig, RemoteConfigParameter, RemoteConfigCondition } from '../models/remote-config.model';
 import { RemoteConfigService } from '../services/remote-config.service';
 
@@ -51,10 +55,15 @@ import { RemoteConfigService } from '../services/remote-config.service';
     MatSortModule,
     MatSelectModule,
     MatSlideToggleModule,
-    MatDividerModule
+    MatDividerModule,
+    MatSidenavModule,
+    MatTooltipModule,
+    MatRadioModule
   ]
 })
 export class DashboardComponent implements OnInit {
+  @ViewChild('editSidenav') editSidenav!: MatSidenav;
+  
   title = 'Firebase Remote Config Dashboard';
   templateData: RemoteConfig | null = null;
   isLoading = true;
@@ -63,6 +72,7 @@ export class DashboardComponent implements OnInit {
   readonly COMPACT_THRESHOLD = 100;
   editingParameter: string | null = null;
   editValue = '';
+  editingParameterData: any = null;
 
   constructor(
     private remoteConfigService: RemoteConfigService,
@@ -106,9 +116,10 @@ export class DashboardComponent implements OnInit {
           description: 'The name of the application displayed to users',
           valueType: 'STRING',
           conditionalValues: {
-            'is_ios': { value: 'My iOS App', useInAppDefault: false },
-            'is_android': { value: 'My Android App', useInAppDefault: false },
-            'is_web': { value: 'My Web App', personalizationValue: { personalizationId: 'web_app_personalization' } }
+            'is_ios': { value: 'My iOS App' },
+            'is_android': { value: 'My Android App' },
+            'is_web': { personalizationValue: { personalizationId: 'web_app_personalization' } },
+            'beta_users': { useInAppDefault: true }
           }
         },
         welcome_message: {
@@ -119,8 +130,8 @@ export class DashboardComponent implements OnInit {
           description: 'Welcome message displayed to new users',
           valueType: 'STRING',
           conditionalValues: {
-            'first_time_user': { value: 'Welcome! Let us show you around.', useInAppDefault: false },
-            'returning_user': { value: 'Welcome back!', rolloutValue: { rolloutId: 'returning_user_message', value: 'Great to see you again!', percent: 50 } }
+            'first_time_user': { value: 'Welcome! Let us show you around.' },
+            'returning_user': { rolloutValue: { rolloutId: 'returning_user_message', value: 'Great to see you again!', percent: 50 } }
           }
         },
         feature_enabled: {
@@ -128,8 +139,8 @@ export class DashboardComponent implements OnInit {
           description: 'Toggle for enabling experimental features',
           valueType: 'BOOLEAN',
           conditionalValues: {
-            'beta_user': { value: 'true', useInAppDefault: false },
-            'premium_user': { value: 'true', personalizationValue: { personalizationId: 'premium_features' } }
+            'beta_user': { value: 'true' },
+            'premium_user': { personalizationValue: { personalizationId: 'premium_features' } }
           }
         }
       },
@@ -141,8 +152,8 @@ export class DashboardComponent implements OnInit {
               description: 'Primary theme color for the application',
               valueType: 'STRING',
               conditionalValues: {
-                'is_ios': { value: '#007AFF', useInAppDefault: false },
-                'dark_mode': { value: '#bb86fc', rolloutValue: { rolloutId: 'dark_theme_rollout', value: '#bb86fc', percent: 25 } }
+                'is_ios': { value: '#007AFF' },
+                'dark_mode': { rolloutValue: { rolloutId: 'dark_theme_rollout', value: '#bb86fc', percent: 25 } }
               }
             }
           },
@@ -153,6 +164,7 @@ export class DashboardComponent implements OnInit {
         { name: 'is_ios', expression: 'device.os == "ios"', tagColor: 'BLUE' },
         { name: 'is_android', expression: 'device.os == "android"', tagColor: 'GREEN' },
         { name: 'beta_user', expression: 'user.group == "beta"', tagColor: 'PINK' },
+        { name: 'beta_users', expression: 'user.inGroup("beta")', tagColor: 'PURPLE' },
         { name: 'premium_user', expression: 'user.isPremium == true', tagColor: 'DEEP_ORANGE' }
       ],
       version: {
@@ -168,26 +180,257 @@ export class DashboardComponent implements OnInit {
   }
 
   startEdit(parameterKey: string, currentValue: string) {
+    console.log('Starting edit for parameter:', parameterKey);
+    console.log('Current value:', currentValue);
+    
     this.editingParameter = parameterKey;
     this.editValue = currentValue;
+    // Deep copy of the parameter data for editing
+    if (this.templateData && this.templateData.parameters && this.templateData.parameters[parameterKey]) {
+      this.editingParameterData = JSON.parse(JSON.stringify(this.templateData.parameters[parameterKey]));
+      
+      console.log('Original parameter data:', this.templateData.parameters[parameterKey]);
+      console.log('Copied parameter data:', this.editingParameterData);
+      
+      // Ensure defaultValue exists
+      if (!this.editingParameterData.defaultValue) {
+        this.editingParameterData.defaultValue = { value: currentValue || '' };
+      }
+      
+      // Ensure conditionalValues exists and has proper structure
+      if (this.editingParameterData.conditionalValues) {
+        console.log('Processing conditional values:', this.editingParameterData.conditionalValues);
+        
+        // Validate and fix conditionalValues structure if needed
+        const fixedConditionalValues: any = {};
+        
+        Object.keys(this.editingParameterData.conditionalValues).forEach(key => {
+          const condValue = this.editingParameterData.conditionalValues[key];
+          console.log(`Processing conditional value for key "${key}":`, condValue);
+          
+          // Ensure each conditional value has proper structure
+          if (condValue && typeof condValue === 'object') {
+            // Firebase API expects oneof field - only one of these can be set
+            if (condValue.useInAppDefault === true) {
+              // If useInAppDefault is true, only set that field
+              fixedConditionalValues[key] = {
+                useInAppDefault: true
+              };
+            } else if (condValue.personalizationValue) {
+              // If personalizationValue exists, use that
+              fixedConditionalValues[key] = {
+                personalizationValue: {
+                  personalizationId: condValue.personalizationValue.personalizationId || ''
+                }
+              };
+            } else if (condValue.rolloutValue) {
+              // If rolloutValue exists, use that
+              fixedConditionalValues[key] = {
+                rolloutValue: {
+                  rolloutId: condValue.rolloutValue.rolloutId || '',
+                  value: condValue.rolloutValue.value || '',
+                  percent: condValue.rolloutValue.percent || 0
+                }
+              };
+            } else {
+              // Default to value field
+              fixedConditionalValues[key] = {
+                value: condValue.value || ''
+              };
+            }
+          }
+        });
+        
+        this.editingParameterData.conditionalValues = fixedConditionalValues;
+        console.log('Fixed conditional values:', fixedConditionalValues);
+      }
+    }
+    
+    // Open the sidenav
+    setTimeout(() => {
+      if (this.editSidenav) {
+        this.editSidenav.open();
+      }
+    }, 0);
   }
 
   cancelEdit() {
     this.editingParameter = null;
     this.editValue = '';
+    this.editingParameterData = null;
+    
+    // Clear cache
+    this.conditionalValuesCache = null;
+    this.lastEditingParameterData = null;
+    
+    // Close the sidenav
+    if (this.editSidenav) {
+      this.editSidenav.close();
+    }
   }
 
   saveEdit(parameterKey: string) {
-    if (this.templateData && this.templateData.parameters) {
-      if (this.templateData.parameters[parameterKey]) {
-        this.templateData.parameters[parameterKey].defaultValue = { value: this.editValue };
-      }
+    if (this.templateData && this.templateData.parameters && this.editingParameterData) {
+      // Update the parameter with edited data
+      this.templateData.parameters[parameterKey] = JSON.parse(JSON.stringify(this.editingParameterData));
     }
     this.editingParameter = null;
     this.editValue = '';
+    this.editingParameterData = null;
     this.snackBar.open('Parameter updated successfully', 'Close', {
       duration: 2000
     });
+    
+    // Close the sidenav
+    if (this.editSidenav) {
+      this.editSidenav.close();
+    }
+  }
+
+  togglePersonalization(event: any) {
+    if (!this.editingParameterData) return;
+    
+    if (!this.editingParameterData.defaultValue) {
+      this.editingParameterData.defaultValue = { value: '' };
+    }
+    
+    if (event.checked) {
+      this.editingParameterData.defaultValue.personalizationValue = {
+        personalizationId: ''
+      };
+    } else {
+      delete this.editingParameterData.defaultValue.personalizationValue;
+    }
+  }
+
+  toggleRollout(event: any) {
+    if (!this.editingParameterData) return;
+    
+    if (!this.editingParameterData.defaultValue) {
+      this.editingParameterData.defaultValue = { value: '' };
+    }
+    
+    if (event.checked) {
+      this.editingParameterData.defaultValue.rolloutValue = {
+        rolloutId: '',
+        value: '',
+        percent: 0
+      };
+    } else {
+      delete this.editingParameterData.defaultValue.rolloutValue;
+    }
+  }
+
+  // Conditional Values methods
+  get availableConditions(): RemoteConfigCondition[] {
+    return this.templateData?.conditions || [];
+  }
+
+  addConditionalValue() {
+    if (!this.editingParameterData) return;
+    
+    if (!this.editingParameterData.conditionalValues) {
+      this.editingParameterData.conditionalValues = {};
+    }
+    
+    // Створюємо тимчасову назву для нової умови
+    const tempConditionKey = `new_condition_${Date.now()}`;
+    
+    // Firebase API expects oneof field - start with just value
+    this.editingParameterData.conditionalValues[tempConditionKey] = {
+      value: ''
+    };
+    
+    // Clear cache to force refresh
+    this.conditionalValuesCache = null;
+  }
+
+  removeConditionalValue(conditionName: string) {
+    if (!this.editingParameterData?.conditionalValues) return;
+    
+    delete this.editingParameterData.conditionalValues[conditionName];
+    
+    // Clear cache to force refresh
+    this.conditionalValuesCache = null;
+  }
+
+  getConditionExpression(conditionName: string): string {
+    if (!conditionName || !this.templateData?.conditions) return '';
+    
+    try {
+      const condition = this.templateData.conditions.find(c => c.name === conditionName);
+      return condition?.expression || '';
+    } catch (error) {
+      console.error('Error getting condition expression:', error);
+      return '';
+    }
+  }
+
+  // Helper method to get conditional values as array for ngFor
+  private conditionalValuesCache: { key: string, value: any }[] | null = null;
+  private lastEditingParameterData: any = null;
+
+  getConditionalValuesArray(): { key: string, value: any }[] {
+    if (!this.editingParameterData?.conditionalValues) {
+      console.log('No conditional values found');
+      this.conditionalValuesCache = [];
+      return [];
+    }
+    
+    // Cache optimization to prevent excessive recalculation
+    if (this.lastEditingParameterData === this.editingParameterData && this.conditionalValuesCache) {
+      return this.conditionalValuesCache;
+    }
+    
+    console.log('Getting conditional values array from:', this.editingParameterData.conditionalValues);
+    
+    try {
+      const result = Object.keys(this.editingParameterData.conditionalValues)
+        .filter(key => key && this.editingParameterData.conditionalValues[key])
+        .map(key => ({
+          key: key,
+          value: this.editingParameterData.conditionalValues[key]
+        }));
+      
+      console.log('Conditional values array result:', result);
+      
+      // Update cache
+      this.lastEditingParameterData = this.editingParameterData;
+      this.conditionalValuesCache = result;
+      
+      return result;
+    } catch (error) {
+      console.error('Error processing conditional values:', error);
+      this.conditionalValuesCache = [];
+      return [];
+    }
+  }
+
+  // Update conditional value condition name
+  updateConditionalValueCondition(oldKey: string, newConditionName: string) {
+    if (!this.editingParameterData?.conditionalValues || !newConditionName || oldKey === newConditionName) return;
+    
+    try {
+      // Перевіряємо чи існує старий ключ
+      if (!this.editingParameterData.conditionalValues[oldKey]) {
+        console.warn(`Conditional value with key "${oldKey}" not found`);
+        return;
+      }
+      
+      // Зберігаємо значення
+      const value = this.editingParameterData.conditionalValues[oldKey];
+      
+      // Видаляємо старий ключ
+      delete this.editingParameterData.conditionalValues[oldKey];
+      
+      // Додаємо з новим ключем
+      this.editingParameterData.conditionalValues[newConditionName] = value;
+      
+      // Clear cache to force refresh
+      this.conditionalValuesCache = null;
+    } catch (error) {
+      console.error('Error updating conditional value condition:', error);
+    }
   }
 
   saveTemplate() {
@@ -509,6 +752,64 @@ export class DashboardComponent implements OnInit {
 
   trackByConditionName(index: number, item: any): string {
     return item.name;
+  }
+
+  trackByConditionalValue(index: number, item: any): string {
+    return item.key;
+  }
+
+  // Methods for conditional value type management
+  getConditionalValueType(conditionalValue: any): string {
+    if (!conditionalValue?.value) return 'value';
+    
+    if (conditionalValue.value.useInAppDefault === true) {
+      return 'useInAppDefault';
+    } else if (conditionalValue.value.personalizationValue) {
+      return 'personalizationValue';
+    } else if (conditionalValue.value.rolloutValue) {
+      return 'rolloutValue';
+    } else {
+      return 'value';
+    }
+  }
+
+  updateConditionalValueType(conditionalValue: any, newType: string) {
+    if (!conditionalValue?.value) return;
+    
+    // Clear all fields first
+    const key = conditionalValue.key;
+    
+    switch (newType) {
+      case 'useInAppDefault':
+        this.editingParameterData.conditionalValues[key] = {
+          useInAppDefault: true
+        };
+        break;
+      case 'personalizationValue':
+        this.editingParameterData.conditionalValues[key] = {
+          personalizationValue: {
+            personalizationId: ''
+          }
+        };
+        break;
+      case 'rolloutValue':
+        this.editingParameterData.conditionalValues[key] = {
+          rolloutValue: {
+            rolloutId: '',
+            value: '',
+            percent: 0
+          }
+        };
+        break;
+      default: // 'value'
+        this.editingParameterData.conditionalValues[key] = {
+          value: ''
+        };
+        break;
+    }
+    
+    // Clear cache to force refresh
+    this.conditionalValuesCache = null;
   }
 
   // Expression analysis methods
